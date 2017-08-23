@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.IO;
 using System.Linq;
 using System.Xml;
 using CSharpFunctionalExtensions;
@@ -48,8 +49,18 @@ namespace ConfigNet
             List<KeyValuePair<string, Type>> missingValues = new List<KeyValuePair<string, Type>>();
             try
             {
+                var dir = Path.GetDirectoryName(path);
+                if (!Directory.Exists(dir))
+                    Directory.CreateDirectory(dir);
+                if (!File.Exists(path)||string.IsNullOrEmpty(File.ReadAllText(path)))
+                {
+                    var emptyConfigFile = "<appSettings><!--Empty--></appSettings>";
+                    File.WriteAllText(path, emptyConfigFile);
+                }
+
                 var xmlNew = new XmlDocument();
                 xmlNew.Load(path);
+
                 var nameValueCollectionNode = xmlNew.FirstChild.ChildNodes.OfType<XmlNode>().Where(n => n.Name.Equals(SettingNodeName, StringComparison.InvariantCultureIgnoreCase));
 
                 var fields = typeof(T).GetFields();
