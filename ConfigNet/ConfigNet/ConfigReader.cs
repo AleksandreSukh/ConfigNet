@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Specialized;
 using System.Configuration;
+using System.Linq;
 using System.Runtime.Serialization;
 
 namespace ConfigNet
@@ -11,6 +12,7 @@ namespace ConfigNet
         {
             if (settingsSource == null)
                 settingsSource = ConfigurationManager.AppSettings;
+         
             var fields = typeof(T).GetFields();
             if (fields.Length == 0)
             {
@@ -22,6 +24,9 @@ namespace ConfigNet
                 object configValue = null;
                 var propType = propertyInfo.FieldType;
                 var propName = propertyInfo.Name;
+
+                if(settingsSource.GetValues(propName).Count()>0)
+                    throw new NotSupportedException($"Duplicate keys not allowed in configuration. The duplicate key with name {propName} found. This option of parsing duplicate keys was disabled for a reason");
 
                 if (propType == typeof(int))
                     configValue = AppSettingsHelper.ConfigParseInt(propName, settingsSource);

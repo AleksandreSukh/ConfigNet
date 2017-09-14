@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 
 namespace ConfigNet
 {
+    /// <summary>
+    /// NameValueCollection must be unique
+    /// </summary>
     public class AppSettingsHelper
     {
         public static int ConfigParseInt(string configKey, NameValueCollection settingsSource)
