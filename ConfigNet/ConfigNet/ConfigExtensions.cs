@@ -8,11 +8,16 @@ using CSharpFunctionalExtensions;
 
 namespace ConfigNet
 {
-    public class ConfigExtensions
+    public static class AppSettingsConstants
     {
-        const string SettingNodeName = "add";
-        const string KeyAttributeName = "key";
-        const string ValueAttributeName = "value";
+        public const string SettingNodeName = "add";
+        public const string KeyAttributeName = "key";
+        public const string ValueAttributeName = "value";
+        public const string AppSettingsNodeName = "appSettings";
+        public const string ConfigSourceKeyName = "configSource";
+    }
+    public static class ConfigExtensions
+    {
 
         public static Result AddMissingValues(string path, List<KeyValuePair<string, Type>> missingValues, Func<string, Type, string> missingValueRetriever)
         {
@@ -22,13 +27,14 @@ namespace ConfigNet
 
             foreach (var mv in missingValues)
             {
-                var mvn = xmlDoc.CreateElement(SettingNodeName, xmlDoc.NamespaceURI);
-                var keyAttr = xmlDoc.CreateAttribute(KeyAttributeName);
-                var valueAttr = xmlDoc.CreateAttribute(ValueAttributeName);
+                var mvn = xmlDoc.CreateElement(AppSettingsConstants.SettingNodeName, xmlDoc.NamespaceURI);
+                var keyAttr = xmlDoc.CreateAttribute(AppSettingsConstants.KeyAttributeName);
+                var valueAttr = xmlDoc.CreateAttribute(AppSettingsConstants.ValueAttributeName);
 
                 //Retrieve missing value
-                var value = missingValueRetriever.Invoke(mv.Key, mv.Value);
-
+                string value;
+                try { value = missingValueRetriever.Invoke(mv.Key, mv.Value); }
+                catch (Exception e) { return Result.Fail(e.Message); }
 
                 keyAttr.Value = mv.Key;
                 valueAttr.Value = value;
@@ -52,7 +58,7 @@ namespace ConfigNet
                 var dir = Path.GetDirectoryName(path);
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
-                if (!File.Exists(path)||string.IsNullOrEmpty(File.ReadAllText(path)))
+                if (!File.Exists(path) || string.IsNullOrEmpty(File.ReadAllText(path)))
                 {
                     var emptyConfigFile = "<appSettings><!--Empty--></appSettings>";
                     File.WriteAllText(path, emptyConfigFile);
@@ -61,7 +67,7 @@ namespace ConfigNet
                 var xmlNew = new XmlDocument();
                 xmlNew.Load(path);
 
-                var nameValueCollectionNode = xmlNew.FirstChild.ChildNodes.OfType<XmlNode>().Where(n => n.Name.Equals(SettingNodeName, StringComparison.InvariantCultureIgnoreCase));
+                var nameValueCollectionNode = xmlNew.FirstChild.ChildNodes.OfType<XmlNode>().Where(n => n.Name.Equals(AppSettingsConstants.SettingNodeName, StringComparison.InvariantCultureIgnoreCase));
 
                 var fields = typeof(T).GetFields();
                 if (fields.Length == 0)
@@ -72,7 +78,7 @@ namespace ConfigNet
                 {
                     var propType = propertyInfo.FieldType;
                     var propName = propertyInfo.Name;
-                    if (!nameValueCollectionNode.Any(n => n.Attributes[KeyAttributeName]?.Value != null && n.Attributes[KeyAttributeName].Value.Equals(propName, StringComparison.InvariantCultureIgnoreCase)))
+                    if (!nameValueCollectionNode.Any(n => n.Attributes[AppSettingsConstants.KeyAttributeName]?.Value != null && n.Attributes[AppSettingsConstants.KeyAttributeName].Value.Equals(propName, StringComparison.InvariantCultureIgnoreCase)))
                         missingValues.Add(new KeyValuePair<string, Type>(propName, propType));
                 }
             }
@@ -84,21 +90,38 @@ namespace ConfigNet
             return Result.Ok(missingValues);
         }
 
-
-        public static Result<T> ParseConfig<T>(string newConfigPath) where T : class
+        static XmlNode GetFirstDescentdantOrDefault(this XmlNode node, Predicate<XmlNode> filter)
+        {
+            if (filter(node)) return node;
+            return node.ChildNodes.OfType<XmlNode>()
+                .Select(cn => GetFirstDescentdantOrDefault(cn, filter))
+                .FirstOrDefault(resultInChild => resultInChild != null);
+        }
+        public static Result<T> ParseConfig<T>(string path) where T : class
         {
             T config = null;
             try
             {
                 var xmlNew = new XmlDocument();
-                xmlNew.Load(newConfigPath);
-                var nameValueCollectionNode = xmlNew.FirstChild.ChildNodes.OfType<XmlNode>().Where(n => n.Name == SettingNodeName);
+                xmlNew.Load(path);
+
+                //var appSettingsNode = xmlNew.ChildNodes.OfType<XmlNode>().FirstOrDefault(n => n.Name.Equals(AppSettingsConstants.AppSettingsNodeName));
+                var appSettingsNode = xmlNew.GetFirstDescentdantOrDefault(n => n.Name.Equals(AppSettingsConstants.AppSettingsNodeName));
+
+                if (appSettingsNode == null) throw new ConfigReaderException($"Couldn't find application settings node:{AppSettingsConstants.AppSettingsNodeName} in file:{path}");
+
+                var appSettingsSourceKeyValue = appSettingsNode.Attributes?[AppSettingsConstants.ConfigSourceKeyName]?.Value;
+                if (appSettingsSourceKeyValue != null)
+                    return ParseConfig<T>(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path)), appSettingsSourceKeyValue));
+
+                var nameValueCollectionNode = appSettingsNode.ChildNodes.OfType<XmlNode>()
+                    .Where(n => n.Name == AppSettingsConstants.SettingNodeName);
 
                 NameValueCollection nvc = new NameValueCollection();
                 foreach (var nod in nameValueCollectionNode)
                 {
-                    if (nod.Attributes?[KeyAttributeName] != null && nod.Attributes[ValueAttributeName] != null)
-                        nvc.Add(nod.Attributes[KeyAttributeName].Value, nod.Attributes[ValueAttributeName].Value);
+                    if (nod.Attributes?[AppSettingsConstants.KeyAttributeName] != null && nod.Attributes[AppSettingsConstants.ValueAttributeName] != null)
+                        nvc.Add(nod.Attributes[AppSettingsConstants.KeyAttributeName].Value, nod.Attributes[AppSettingsConstants.ValueAttributeName].Value);
                 }
                 config = ConfigReader.ReadFromSettings<T>(nvc);
 

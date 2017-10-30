@@ -47,6 +47,7 @@
     <Compile Include="AppSettingsHelper.cs" />
     <Compile Include="ConfigExtensions.cs" />
     <Compile Include="ConfigReader.cs" />
+    <Compile Include="ConfigReaderException.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
