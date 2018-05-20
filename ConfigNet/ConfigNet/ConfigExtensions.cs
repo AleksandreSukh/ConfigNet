@@ -56,6 +56,8 @@ namespace ConfigNet
             try
             {
                 var dir = Path.GetDirectoryName(path);
+                if (dir == string.Empty)
+                    dir = Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location);
                 if (!Directory.Exists(dir))
                     Directory.CreateDirectory(dir);
                 if (!File.Exists(path) || string.IsNullOrEmpty(File.ReadAllText(path)))
